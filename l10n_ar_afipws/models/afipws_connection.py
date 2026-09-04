@@ -22,6 +22,7 @@ class AfipwsConnection(models.Model):
         required=True,
         index=True,
         auto_join=True,
+        ondelete="restrict",
     )
     uniqueid = fields.Char(
         "Unique ID",
@@ -151,7 +152,7 @@ class AfipwsConnection(models.Model):
                 msg = _("It seems like AFIP service is not available.\nPlease try again later or try manually")
                 raise RedirectWarning(msg, action.id, _("Go and find data manually"))
             raise UserError(
-                "There was a connection problem to AFIP. Contact your Odoo Provider. Error\n\n%s" % repr(error)
+                _("There was a connection problem to AFIP. Contact your Odoo Provider. Error\n\n%s") % repr(error)
             )
 
         cuit = self.company_id.partner_id.ensure_vat()

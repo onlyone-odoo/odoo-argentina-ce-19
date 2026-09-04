@@ -9,7 +9,6 @@
             <!-- we change button labels for better usability -->
             <button name="action_post" position="attributes">
                 <attribute name="invisible">state != 'draft' or validation_type</attribute>
-                <attribute name="states"/>
             </button>
             <button name="action_post" position="after">
                 <button name="action_post" type="object" invisible="state != 'draft' or validation_type != 'production'" string="Validar en AFIP" class="oe_highlight" groups="account.group_account_invoice"/>
