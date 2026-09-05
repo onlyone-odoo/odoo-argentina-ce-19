@@ -6,7 +6,7 @@ Electronic invoicing still uses **pyafipws** (WSAA / WSFE / WSFEX / WSBFE). This
 
 `l10n_ar_edi` is Enterprise and is **not** a dependency.
 
-Upstream Adhoc 19.0 currently ships these modules with `installable: False` and version `18.0.*`. This fork is installable on 19.0 (`19.0.1.0.0`).
+Upstream Adhoc 19.0 currently ships these modules with `installable: False` and version `18.0.*`. This fork is installable on 19.0.
 
 ## Modules
 
@@ -18,23 +18,6 @@ Upstream Adhoc 19.0 currently ships these modules with `installable: False` and 
 | `l10n_ar_reports` | `installable: False` (needs `report_xlsx`; out of scope) |
 
 Original localization work: **Adhoc SA** — https://github.com/ingadhoc/odoo-argentina-ce
-
-## Local WSL (Ubuntu-24.04)
-
-Odoo 19 runs **in parallel** with any local Odoo 18 (port **8079**, database `arce19_dev`). Do **not** add `cajaone_*` addons to this stack.
-
-From Windows PowerShell:
-
-```powershell
-.\dev\wsl\arce19-odoo.ps1 bootstrap
-.\dev\wsl\arce19-odoo.ps1 init
-.\dev\wsl\arce19-odoo.ps1 start
-.\dev\wsl\arce19-odoo.ps1 logs
-```
-
-- URL: http://127.0.0.1:8079
-- DB: `arce19_dev` (empty / clean)
-- Admin: `admin` / `admin` (CLI-created database)
 
 ## Python / pyafipws
 
