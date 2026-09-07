@@ -326,6 +326,40 @@ class AccountMove(models.Model):
             a_invoices += inv
         return (a_invoices, r_invoices)
 
+    def _l10n_ar_is_transparency_document(self):
+        """Return True for Factura/ND/NC B (AFIP codes 6/7/8), RG 5614/2024.
+
+        Some Odoo 19 ``l10n_ar`` builds omit this helper while the invoice
+        report and POS tickets already call it (typically on Factura B from
+        POS to Consumidor Final).
+        """
+        self.ensure_one()
+        parent_fn = getattr(super(), "_l10n_ar_is_transparency_document", None)
+        if parent_fn:
+            return parent_fn()
+        return self.l10n_latam_document_type_id.code in ("6", "7", "8")
+
+    @api.model
+    def _l10n_ar_is_tax_group_other_national_ind_tax(self, tax_group):
+        parent_fn = getattr(super(), "_l10n_ar_is_tax_group_other_national_ind_tax", None)
+        if parent_fn:
+            return parent_fn(tax_group)
+        return tax_group.l10n_ar_tribute_afip_code in ("01", "04")
+
+    @api.model
+    def _l10n_ar_is_tax_group_vat(self, tax_group):
+        parent_fn = getattr(super(), "_l10n_ar_is_tax_group_vat", None)
+        if parent_fn:
+            return parent_fn(tax_group)
+        return bool(tax_group.l10n_ar_vat_afip_code)
+
+    @api.model
+    def _l10n_ar_is_tax_group_iibb_perception(self, tax_group):
+        parent_fn = getattr(super(), "_l10n_ar_is_tax_group_iibb_perception", None)
+        if parent_fn:
+            return parent_fn(tax_group)
+        return tax_group.l10n_ar_tribute_afip_code == "07"
+
     def get_pyafipws_currency_rate(self):
         self.ensure_one()
         afip_ws = self.journal_id.afip_ws
