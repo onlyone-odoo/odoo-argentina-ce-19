@@ -5,6 +5,7 @@
 import base64
 import json
 import logging
+import re
 import traceback
 from datetime import datetime
 
@@ -217,17 +218,125 @@ class AccountMove(models.Model):
             return ident_code, vat_digits or "0"
         return "99", "0"
 
+    def _pyafipws_parse_document_number(self):
+        """Return point of sale / invoice number, or False if not available.
+
+        ``l10n_latam_document_number`` is False while the move name is still
+        ``/``. Core ``_l10n_ar_get_document_number_parts()`` then crashes with
+        ``'bool' object has no attribute 'split'``. POS credit notes hit this
+        on the original invoice (CbteAsoc).
+        """
+        self.ensure_one()
+        doc_code = self.l10n_latam_document_type_id.code
+        prefix = self.l10n_latam_document_type_id.doc_code_prefix or ""
+        candidates = [self.l10n_latam_document_number]
+        if self.name and self.name != "/":
+            candidates.append(self.name)
+        for raw in candidates:
+            if not raw:
+                continue
+            text = str(raw).strip()
+            if prefix and text.startswith(prefix):
+                text = text[len(prefix) :].strip()
+            elif " " in text:
+                text = text.split(" ", 1)[-1]
+            if doc_code and "-" in text:
+                try:
+                    return self._l10n_ar_get_document_number_parts(text, doc_code)
+                except (AttributeError, TypeError, ValueError):
+                    pass
+            match = re.search(r"(\d{1,5})-(\d{1,8})", str(raw))
+            if match:
+                return {
+                    "point_of_sale": int(match.group(1)),
+                    "invoice_number": int(match.group(2)),
+                }
+        return False
+
+    def _pyafipws_related_invoice_from_pos(self):
+        """Find the original electronic invoice of a POS refund order."""
+        self.ensure_one()
+        if "pos_order_ids" not in self._fields:
+            return self.browse()
+        refund_orders = self.pos_order_ids
+        origin_orders = self.env["pos.order"]
+        if "refunded_order_id" in refund_orders._fields:
+            origin_orders |= refund_orders.refunded_order_id
+        if "refunded_order_ids" in refund_orders._fields:
+            origin_orders |= refund_orders.refunded_order_ids
+        if not origin_orders:
+            origin_orders = refund_orders.lines.refunded_orderline_id.order_id
+        invoices = origin_orders.mapped("account_move")
+        if not invoices and origin_orders:
+            invoices = self.env["account.move"].search(
+                [
+                    ("pos_order_ids", "in", origin_orders.ids),
+                    ("move_type", "=", "out_invoice"),
+                    ("afip_auth_code", "!=", False),
+                ],
+                limit=1,
+            )
+        return invoices.filtered(
+            lambda move: move.is_invoice()
+            and move.move_type == "out_invoice"
+            and move.afip_auth_code
+            and move.company_id.country_id.code == "AR"
+        )[:1]
+
+    def _pyafipws_add_cmp_asoc(self, ws, related, date_format=None):
+        """Attach CbteAsoc without calling split() on a missing document number."""
+        self.ensure_one()
+        if not related:
+            return
+        related = related[:1]
+        parts = related._pyafipws_parse_document_number()
+        if not parts:
+            raise UserError(
+                _(
+                    "The credit note must reference the original electronic "
+                    "invoice (point of sale and number). Related invoice %s "
+                    "has no AFIP document number."
+                )
+                % related.display_name
+            )
+        cuit = related.company_id.partner_id.l10n_ar_vat or related.company_id.vat or ""
+        cuit = "".join(ch for ch in str(cuit) if ch.isdigit())
+        fecha = related.invoice_date.strftime(date_format) if date_format and related.invoice_date else None
+        ws.AgregarCmpAsoc(
+            related.l10n_latam_document_type_id.code,
+            parts["point_of_sale"],
+            parts["invoice_number"],
+            cuit or None,
+            fecha,
+        )
+
     def get_related_invoices_data(self):
         """
         List related invoice information to fill CbtesAsoc.
+
+        POS refunds should already set ``reversed_entry_id`` from the original
+        order invoice. If that link is missing, recover it from the POS order.
         """
         self.ensure_one()
-        if self.l10n_latam_document_type_id.internal_type == "credit_note":
-            return self.reversed_entry_id
-        elif self.l10n_latam_document_type_id.internal_type == "debit_note":
+        internal_type = self.l10n_latam_document_type_id.internal_type
+        if internal_type == "debit_note":
             return self.debit_origin_id
-        else:
+        if internal_type != "credit_note":
             return self.browse()
+
+        candidates = self.reversed_entry_id
+        if "pos_refunded_invoice_ids" in self._fields:
+            candidates |= self.pos_refunded_invoice_ids
+        candidates |= self._pyafipws_related_invoice_from_pos()
+        candidates = candidates.filtered(
+            lambda move: move.is_invoice()
+            and move.move_type == "out_invoice"
+            and move.company_id.country_id.code == "AR"
+        )
+        with_cae = candidates.filtered(lambda move: move.afip_auth_code)
+        pool = with_cae or candidates
+        with_number = pool.filtered(lambda move: move._pyafipws_parse_document_number())
+        return (with_number or pool)[:1]
 
     def _post(self, soft=True):
         request_cae_invoices = self.filtered(

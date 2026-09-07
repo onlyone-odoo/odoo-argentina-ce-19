@@ -186,22 +186,11 @@ class AccountMove(models.Model):
             )
             if transmission_type:
                 ws.AgregarOpcional(opcional_id=27, valor=transmission_type)
-        elif int(invoice_info["doc_afip_code"]) in [202, 203, 207, 208, 212, 213]:
+        elif int(invoice_info["doc_afip_code"] or 0) in [202, 203, 207, 208, 212, 213]:
             valor = self.afip_fce_es_anulacion and "S" or "N"
             ws.AgregarOpcional(opcional_id=22, valor=valor)
 
-        if invoice_info["CbteAsoc"]:
-            doc_number_parts = self._l10n_ar_get_document_number_parts(
-                invoice_info["CbteAsoc"].l10n_latam_document_number,
-                invoice_info["CbteAsoc"].l10n_latam_document_type_id.code,
-            )
-            ws.AgregarCmpAsoc(
-                invoice_info["CbteAsoc"].l10n_latam_document_type_id.code,
-                doc_number_parts["point_of_sale"],
-                doc_number_parts["invoice_number"],
-                self.company_id.vat,
-                invoice_info["CbteAsoc"].invoice_date.strftime("%Y%m%d"),
-            )
+        self._pyafipws_add_cmp_asoc(ws, invoice_info["CbteAsoc"], date_format="%Y%m%d")
         if invoice_info["afip_associated_period_from"] and invoice_info["afip_associated_period_to"]:
             ws.AgregarPeriodoComprobantesAsociados(
                 invoice_info["afip_associated_period_from"], invoice_info["afip_associated_period_to"]
@@ -218,22 +207,11 @@ class AccountMove(models.Model):
             )
             if transmission_type:
                 ws.AgregarOpcional(opcional_id=27, valor=transmission_type)
-        elif int(invoice_info["doc_afip_code"]) in [202, 203, 207, 208, 212, 213]:
+        elif int(invoice_info["doc_afip_code"] or 0) in [202, 203, 207, 208, 212, 213]:
             valor = self.afip_fce_es_anulacion and "S" or "N"
             ws.AgregarOpcional(opcional_id=22, valor=valor)
 
-        if invoice_info["CbteAsoc"]:
-            doc_number_parts = self._l10n_ar_get_document_number_parts(
-                invoice_info["CbteAsoc"].l10n_latam_document_number,
-                invoice_info["CbteAsoc"].l10n_latam_document_type_id.code,
-            )
-            ws.AgregarCmpAsoc(
-                invoice_info["CbteAsoc"].l10n_latam_document_type_id.code,
-                doc_number_parts["point_of_sale"],
-                doc_number_parts["invoice_number"],
-                self.company_id.vat,
-                invoice_info["CbteAsoc"].invoice_date.strftime("%Y%m%d"),
-            )
+        self._pyafipws_add_cmp_asoc(ws, invoice_info["CbteAsoc"], date_format="%Y%m%d")
         for line in invoice_info["line"]:
             ws.AgregarItem(
                 line["codigo"],
@@ -248,17 +226,7 @@ class AccountMove(models.Model):
             )
 
     def wsfex_invoice_add_info(self, ws, invoice_info):
-        if invoice_info["CbteAsoc"]:
-            doc_number_parts = self._l10n_ar_get_document_number_parts(
-                invoice_info["CbteAsoc"].l10n_latam_document_number,
-                invoice_info["CbteAsoc"].l10n_latam_document_type_id.code,
-            )
-            ws.AgregarCmpAsoc(
-                invoice_info["CbteAsoc"].l10n_latam_document_type_id.code,
-                doc_number_parts["point_of_sale"],
-                doc_number_parts["invoice_number"],
-                self.company_id.vat,
-            )
+        self._pyafipws_add_cmp_asoc(ws, invoice_info["CbteAsoc"])
 
         for line in invoice_info["line"]:
             ws.AgregarItem(
@@ -272,18 +240,7 @@ class AccountMove(models.Model):
             )
 
     def wsmtxca_invoice_add_info(self, ws, invoice_info):
-        if invoice_info["CbteAsoc"]:
-            doc_number_parts = self._l10n_ar_get_document_number_parts(
-                invoice_info["CbteAsoc"].l10n_latam_document_number,
-                invoice_info["CbteAsoc"].l10n_latam_document_type_id.code,
-            )
-            ws.AgregarCmpAsoc(
-                invoice_info["CbteAsoc"].l10n_latam_document_type_id.code,
-                doc_number_parts["point_of_sale"],
-                doc_number_parts["invoice_number"],
-                self.company_id.vat,
-                invoice_info["CbteAsoc"].invoice_date.strftime("%Y-%m-%d"),
-            )
+        self._pyafipws_add_cmp_asoc(ws, invoice_info["CbteAsoc"], date_format="%Y-%m-%d")
         self.pyafipws_add_tax(ws, invoice_info.get("base_lines"))
 
     ##########################
