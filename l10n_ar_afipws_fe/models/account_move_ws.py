@@ -326,7 +326,7 @@ class AccountMove(models.Model):
         journal = self.journal_id
         invoice_info = {}
 
-        invoice_info["cancela_misma_moneda_ext"] = self.l10n_ar_payment_foreign_currency
+        invoice_info["cancela_misma_moneda_ext"] = self.l10n_ar_payment_foreign_currency or "N"
         invoice_info["condicion_iva_receptor_id"] = self.partner_id.l10n_ar_afip_responsibility_type_id.code
 
         invoice_info["commercial_partner"] = self.commercial_partner_id
@@ -338,15 +338,14 @@ class AccountMove(models.Model):
             int(self.journal_id.get_pyafipws_last_invoice(self.l10n_latam_document_type_id)) + 1
         )
 
-        invoice_info["partner_id_code"] = invoice_info[
-            "commercial_partner"
-        ].l10n_latam_identification_type_id.l10n_ar_afip_code
-        invoice_info["tipo_doc"] = invoice_info["partner_id_code"] or "99"
-        invoice_info["nro_doc"] = invoice_info["partner_id_code"] and invoice_info["commercial_partner"].vat or "0"
+        tipo_doc, nro_doc = self._pyafipws_get_receptor_doc()
+        invoice_info["partner_id_code"] = tipo_doc
+        invoice_info["tipo_doc"] = tipo_doc
+        invoice_info["nro_doc"] = nro_doc
         invoice_info["cbt_desde"] = invoice_info["cbt_hasta"] = invoice_info["cbte_nro"] = invoice_info[
             "ws_next_invoice_number"
         ]
-        invoice_info["concepto"] = invoice_info["tipo_expo"] = int(self.l10n_ar_afip_concept)
+        invoice_info["concepto"] = invoice_info["tipo_expo"] = int(self.l10n_ar_afip_concept or 1)
 
         invoice_info["fecha_cbte"] = self.invoice_date or fields.Date.today()
         invoice_info["mipyme_fce"] = int(invoice_info["doc_afip_code"]) in [
@@ -394,7 +393,8 @@ class AccountMove(models.Model):
         invoice_info["imp_trib"] = str("%.2f" % amounts["not_vat_taxes_amount"])
         invoice_info["imp_op_ex"] = str("%.2f" % amounts["vat_exempt_base_amount"])
         invoice_info["moneda_id"] = self.currency_id.l10n_ar_afip_code
-        invoice_info["moneda_ctz"] = 1 / self.invoice_currency_rate or 1
+        rate = self.invoice_currency_rate or 1.0
+        invoice_info["moneda_ctz"] = 1 / rate if rate else 1
         invoice_info["CbteAsoc"] = self.get_related_invoices_data()
 
         invoice_info["afip_associated_period_from"] = self.afip_associated_period_from
