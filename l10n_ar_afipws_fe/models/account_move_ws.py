@@ -147,8 +147,8 @@ class AccountMove(models.Model):
         else:
             return _("AFIP WS %s not implemented") % afip_ws
 
-    def pyafipws_add_tax(self, ws):
-        vat_items = self._get_vat()
+    def pyafipws_add_tax(self, ws, base_lines=None):
+        vat_items = self._get_vat(base_lines=base_lines)
         for item in vat_items:
             ws.AgregarIva(item["Id"], "%.2f" % item["BaseImp"], "%.2f" % item["Importe"])
 
@@ -206,7 +206,7 @@ class AccountMove(models.Model):
             ws.AgregarPeriodoComprobantesAsociados(
                 invoice_info["afip_associated_period_from"], invoice_info["afip_associated_period_to"]
             )
-        self.pyafipws_add_tax(ws)
+        self.pyafipws_add_tax(ws, invoice_info.get("base_lines"))
 
     def wsbfe_invoice_add_info(self, ws, invoice_info):
         if invoice_info["mipyme_fce"]:
@@ -284,7 +284,7 @@ class AccountMove(models.Model):
                 self.company_id.vat,
                 invoice_info["CbteAsoc"].invoice_date.strftime("%Y-%m-%d"),
             )
-        self.pyafipws_add_tax(ws)
+        self.pyafipws_add_tax(ws, invoice_info.get("base_lines"))
 
     ##########################
     # Autorizo en afip la factura
@@ -370,7 +370,12 @@ class AccountMove(models.Model):
             invoice_info["fecha_serv_desde"] = self.l10n_ar_afip_service_start
             invoice_info["fecha_serv_hasta"] = self.l10n_ar_afip_service_end
 
-        amounts = self._l10n_ar_get_amounts()
+        # Odoo 18.0+/19 _l10n_ar_get_amounts() defaults to [] and returns
+        # zeros unless the tax-engine base lines are passed (l10n_ar_edi does
+        # the same). Empty amounts make AFIP reject with 10048/10018.
+        base_lines, _tax_lines = self._get_rounded_base_and_tax_lines()
+        invoice_info["base_lines"] = base_lines
+        amounts = self._l10n_ar_get_amounts(base_lines=base_lines)
         invoice_info["amounts"] = amounts
         # invoice amount totals:
         invoice_info["imp_total"] = str("%.2f" % self.amount_total)
